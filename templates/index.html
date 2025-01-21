@@ -1,0 +1,339 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Add marked library for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* Basic Markdown styling */
+        .markdown-content h1 { font-size: 1.8em; font-weight: bold; margin: 0.8em 0; }
+        .markdown-content h2 { font-size: 1.5em; font-weight: bold; margin: 0.7em 0; }
+        .markdown-content h3 { font-size: 1.3em; font-weight: bold; margin: 0.6em 0; }
+        .markdown-content p { margin: 0.5em 0; }
+        .markdown-content ul { list-style-type: disc; margin-left: 1.5em; }
+        .markdown-content ol { list-style-type: decimal; margin-left: 1.5em; }
+        .markdown-content code { background-color: #f0f0f0; padding: 0.2em 0.4em; border-radius: 3px; }
+        .markdown-content pre { background-color: #f0f0f0; padding: 1em; border-radius: 5px; overflow-x: auto; }
+        .markdown-content blockquote { border-left: 4px solid #ddd; padding-left: 1em; margin: 1em 0; color: #666; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Tabs -->
+        <div class="mb-6 flex space-x-4">
+            <button onclick="switchTab('todos')" id="todos-tab" 
+                    class="px-4 py-2 rounded-lg font-semibold">
+                Todos
+            </button>
+            <button onclick="switchTab('notes')" id="notes-tab"
+                    class="px-4 py-2 rounded-lg font-semibold">
+                Notes
+            </button>
+        </div>
+
+        <!-- Todos Section -->
+        <div id="todos-section">
+            <div class="grid grid-cols-2 gap-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-2xl font-bold mb-4">Active Tasks</h2>
+                    <div class="mb-4">
+                        <input type="text" id="new-todo"
+                               class="w-full p-2 border rounded mb-2"
+                               placeholder="Add new task...">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="urgent-checkbox"
+                                   class="h-5 w-5 mr-2">
+                            <label for="urgent-checkbox">Mark as Urgent</label>
+                        </div>
+                    </div>
+                    <div id="active-todos" class="space-y-2"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-2xl font-bold mb-4">Completed Tasks</h2>
+                    <div id="completed-todos" class="space-y-2"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes Section -->
+        <div id="notes-section" class="hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-2xl font-bold mb-4">Notes</h2>
+                <div class="mb-4">
+                    <div class="flex mb-2">
+                        <div class="flex-1">
+                            <textarea id="new-note" class="w-full p-2 border rounded"
+                                    rows="4" placeholder="Add new note... (Markdown supported)"></textarea>
+                        </div>
+                        <div class="flex-1 ml-4 p-2 border rounded bg-gray-50">
+                            <div id="new-note-preview" class="markdown-content">
+                                Preview will appear here...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button onclick="addNote()" 
+                                class="bg-blue-500 text-white px-4 py-2 rounded">
+                            Add Note
+                        </button>
+                        <span class="text-sm text-gray-500">
+                            Markdown supported: **bold**, *italic*, # headers, - lists, etc.
+                        </span>
+                    </div>
+                </div>
+                <div id="notes-list" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTodos();
+            loadNotes();
+            switchTab('todos');
+
+            document.getElementById('new-todo').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const task = e.target.value;
+                    const urgent = document.getElementById('urgent-checkbox').checked;
+                    addTodo(task, urgent);
+                    e.target.value = '';
+                    document.getElementById('urgent-checkbox').checked = false;
+                }
+            });
+
+            // Add live preview for new note
+            document.getElementById('new-note').addEventListener('input', (e) => {
+                const preview = document.getElementById('new-note-preview');
+                preview.innerHTML = marked.parse(e.target.value || 'Preview will appear here...');
+            });
+        });
+
+        function switchTab(tab) {
+            const todosSection = document.getElementById('todos-section');
+            const notesSection = document.getElementById('notes-section');
+            const todosTab = document.getElementById('todos-tab');
+            const notesTab = document.getElementById('notes-tab');
+
+            if (tab === 'todos') {
+                todosSection.classList.remove('hidden');
+                notesSection.classList.add('hidden');
+                todosTab.classList.add('bg-white', 'shadow');
+                notesTab.classList.remove('bg-white', 'shadow');
+            } else {
+                todosSection.classList.add('hidden');
+                notesSection.classList.remove('hidden');
+                todosTab.classList.remove('bg-white', 'shadow');
+                notesTab.classList.add('bg-white', 'shadow');
+            }
+        }
+
+        async function loadNotes() {
+            const response = await fetch('/api/notes');
+            const notes = await response.json();
+            renderNotes(notes);
+        }
+
+        function renderNotes(notes) {
+            const container = document.getElementById('notes-list');
+            container.innerHTML = notes.map(note => `
+                <div class="p-4 border rounded" id="note-${note.id}">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow">
+                            <div class="note-content markdown-content">
+                                ${marked.parse(note.content)}
+                            </div>
+                            <div class="edit-container hidden">
+                                <div class="flex mb-2">
+                                    <textarea class="note-editor w-full p-2 border rounded">${note.content}</textarea>
+                                    <div class="flex-1 ml-4 p-2 border rounded bg-gray-50">
+                                        <div class="note-preview markdown-content">
+                                            ${marked.parse(note.content)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-500 mt-2">
+                                ${new Date(note.created_at).toLocaleString()}
+                            </p>
+                        </div>
+                        <div class="flex space-x-2 ml-4">
+                            <button onclick="toggleEditNote(${note.id})" 
+                                    class="edit-btn px-2 py-1 text-sm rounded bg-blue-100 text-blue-700">
+                                Edit
+                            </button>
+                            <button onclick="deleteNote(${note.id})"
+                                    class="px-2 py-1 text-sm rounded bg-red-100 text-red-700">
+                                Delete
+                            </button>
+                            <button onclick="saveNote(${note.id})" 
+                                    class="save-btn px-2 py-1 text-sm rounded bg-green-100 text-green-700 hidden">
+                                Save
+                            </button>
+                            <button onclick="cancelEdit(${note.id})" 
+                                    class="cancel-btn px-2 py-1 text-sm rounded bg-gray-100 text-gray-700 hidden">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Add live preview for all editors
+            document.querySelectorAll('.note-editor').forEach(editor => {
+                editor.addEventListener('input', (e) => {
+                    const preview = e.target.parentElement.querySelector('.note-preview');
+                    preview.innerHTML = marked.parse(e.target.value);
+                });
+            });
+        }
+
+        function toggleEditNote(noteId) {
+            const noteDiv = document.getElementById(`note-${noteId}`);
+            const content = noteDiv.querySelector('.note-content');
+            const editContainer = noteDiv.querySelector('.edit-container');
+            const editBtn = noteDiv.querySelector('.edit-btn');
+            const saveBtn = noteDiv.querySelector('.save-btn');
+            const cancelBtn = noteDiv.querySelector('.cancel-btn');
+
+            content.classList.add('hidden');
+            editContainer.classList.remove('hidden');
+            editBtn.classList.add('hidden');
+            saveBtn.classList.remove('hidden');
+            cancelBtn.classList.remove('hidden');
+        }
+
+        function cancelEdit(noteId) {
+            const noteDiv = document.getElementById(`note-${noteId}`);
+            const content = noteDiv.querySelector('.note-content');
+            const editContainer = noteDiv.querySelector('.edit-container');
+            const editBtn = noteDiv.querySelector('.edit-btn');
+            const saveBtn = noteDiv.querySelector('.save-btn');
+            const cancelBtn = noteDiv.querySelector('.cancel-btn');
+
+            content.classList.remove('hidden');
+            editContainer.classList.add('hidden');
+            editBtn.classList.remove('hidden');
+            saveBtn.classList.add('hidden');
+            cancelBtn.classList.add('hidden');
+        }
+
+        async function saveNote(noteId) {
+            const noteDiv = document.getElementById(`note-${noteId}`);
+            const editor = noteDiv.querySelector('.note-editor');
+            const content = editor.value.trim();
+
+            if (!content) return;
+
+            await fetch(`/api/notes/${noteId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content })
+            });
+
+            loadNotes();
+        }
+
+        async function deleteNote(noteId) {
+            if (!confirm('Are you sure you want to delete this note?')) return;
+
+            await fetch(`/api/notes/${noteId}`, {
+                method: 'DELETE'
+            });
+
+            loadNotes();
+        }
+
+        async function addNote() {
+            const textarea = document.getElementById('new-note');
+            const content = textarea.value.trim();
+            
+            if (!content) return;
+
+            await fetch('/api/notes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content })
+            });
+            
+            textarea.value = '';
+            loadNotes();
+        }
+
+        async function loadTodos() {
+            const response = await fetch('/api/todos');
+            const todos = await response.json();
+
+            const activeTodos = todos.filter(todo => !todo.completed);
+            const completedTodos = todos.filter(todo => todo.completed);
+
+            renderTodos('active-todos', activeTodos);
+            renderTodos('completed-todos', completedTodos);
+        }
+
+        function renderTodos(containerId, todos) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = todos.map(todo => `
+                <div class="flex items-center space-x-2 p-2 border rounded ${todo.urgent ? 'bg-red-50' : ''}">
+                    <input type="checkbox"
+                           ${todo.completed ? 'checked' : ''}
+                           onchange="toggleTodo(${todo.id}, this.checked)"
+                           class="h-5 w-5">
+                    <span class="${todo.completed ? 'line-through text-gray-500' : ''}
+                                ${todo.urgent ? 'text-red-600 font-medium' : ''}">
+                        ${todo.task}
+                    </span>
+                    ${!todo.completed ? `
+                        <button onclick="toggleUrgent(${todo.id}, ${!todo.urgent})"
+                                class="ml-auto px-2 py-1 text-sm rounded
+                                       ${todo.urgent ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}">
+                            ${todo.urgent ? 'Urgent' : 'Mark Urgent'}
+                        </button>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        async function addTodo(task, urgent) {
+            await fetch('/api/todos', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ task, urgent })
+            });
+            loadTodos();
+        }
+
+        async function toggleTodo(id, completed) {
+            await fetch(`/api/todos/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ completed })
+            });
+            loadTodos();
+        }
+
+        async function toggleUrgent(id, urgent) {
+            await fetch(`/api/todos/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ urgent })
+            });
+            loadTodos();
+        }
+    </script>
+</body>
+</html>
